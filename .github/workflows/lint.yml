@@ -1,0 +1,21 @@
+name: Lint
+on: [push, pull_request, workflow_dispatch]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: YAML Lint
+        uses: ibiqlik/action-yamllint@v3.1.1
+        with:
+          file_or_dir: .
+          format: github
+          strict: false
+          no_warnings: false
+
+      - name: Hadolint (Dockerfile Lint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: containers/{REPO}/Dockerfile
