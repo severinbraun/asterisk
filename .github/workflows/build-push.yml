@@ -17,7 +17,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE: ghcr.io/${{ github.repository }}          # ghcr.io/<owner>/<repo>
+  IMAGE: ghcr.io/${{ github.repository }}
   OWNER: ${{ github.repository_owner }}
   REPO: ${{ github.event.repository.name }}
   TAG: latest
@@ -32,14 +32,7 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-      - name: Check available package versions (Ubuntu 24.04)
-        run: |
-          docker run --rm ubuntu:24.04 bash -c "set -eux; \
-            apt-get update; \
-            apt-cache policy apache2 mariadb-server asterisk \
-              php php-cli php-common php-curl php-mysql php-xml \
-              php-mbstring php-gd php-zip php-bcmath php-intl \
-              sox lame tini tzdata curl ca-certificates"
+
       - name: Resolve Version (Tag/Release/Manual)
         id: ver
         shell: bash
@@ -59,18 +52,21 @@ jobs:
           if [ -z "${VER}" ]; then
             echo "version=" >> $GITHUB_OUTPUT
             echo "extra_tags=" >> $GITHUB_OUTPUT
-          else
-            IFS='.' read -r MAJOR MINOR PATCH <<<"${VER}"
-            {
-              echo "${{ env.IMAGE }}:v${VER}"
-              echo "${{ env.IMAGE }}:${VER}"
-              echo "${{ env.IMAGE }}:${MAJOR}.${MINOR}"
-              echo "${{ env.IMAGE }}:${MAJOR}"
-            } > /tmp/extra_tags.txt
-            echo "version=${VER}" >> $GITHUB_OUTPUT
-            echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
-            echo "TAG=${VER}" >> $GITHUB_ENV
+            exit 0
           fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<<"${VER}"
+
+          {
+            echo "${{ env.IMAGE }}:v${VER}"
+            echo "${{ env.IMAGE }}:${VER}"
+            echo "${{ env.IMAGE }}:${MAJOR}.${MINOR}"
+            echo "${{ env.IMAGE }}:${MAJOR}"
+          } > /tmp/extra_tags.txt
+
+          echo "version=${VER}" >> $GITHUB_OUTPUT
+          echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
+          echo "TAG=${VER}" >> $GITHUB_ENV
 
       - name: Docker meta (branch/latest/sha)
         id: meta
@@ -86,25 +82,6 @@ jobs:
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
 
-      # ---- NEU: gepinnte Paketversionen einlesen ----
-      - name: Read pinned versions (containers/${{ env.REPO }}/versions.env)
-        id: versions
-        shell: bash
-        run: |
-          set -euo pipefail
-          file="containers/${{ env.REPO }}/versions.env"
-          if [ ! -f "$file" ]; then
-            echo "::error::versions.env fehlt unter $file (DL3008 Pinning erwartet)"
-            exit 1
-          fi
-          # Jede NON-Comment-Zeile KEY=VALUE als Output setzen
-          while IFS='=' read -r k v; do
-            [[ -z "${k}" || "${k}" =~ ^# ]] && continue
-            k="$(echo "$k" | tr -cd 'A-Z0-9_')"
-            v="$(echo "$v" | sed 's/^"\(.*\)"$/\1/')"
-            echo "$k=$v" >> "$GITHUB_OUTPUT"
-          done < "$file"
-
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
 
@@ -114,6 +91,29 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+
+      # >>> NEU: versions.env automatisch als build-args injizieren
+      - name: Build args aus versions.env laden
+        id: args
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Datei existiert? (optional: fail soft)
+          FILE="containers/${{ env.REPO }}/versions.env"
+          if [ ! -f "$FILE" ]; then
+            echo "Hinweis: $FILE nicht gefunden – es werden nur OWNER/REPO übergeben."
+          fi
+
+          {
+            echo "args<<'EOF'"
+            echo "OWNER=${{ env.OWNER }}"
+            echo "REPO=${{ env.REPO }}"
+            if [ -f "$FILE" ]; then
+              # Comments & Leerzeilen entfernen
+              grep -v '^\s*#' "$FILE" | sed '/^\s*$/d'
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Build & Push (multi-arch)
         uses: docker/build-push-action@v6
@@ -126,25 +126,11 @@ jobs:
             ${{ steps.meta.outputs.tags }}
             ${{ steps.ver.outputs.extra_tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: |
-            OWNER=${{ env.OWNER }}
-            REPO=${{ env.REPO }}
-            $(cat containers/${{ env.REPO }}/versions.env | xargs)
+          build-args: ${{ steps.args.outputs.args }}
           provenance: false
           sbom: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-      # (Optional) Mini-Verify – kann erweitert werden
-      # - name: Verify installed versions
-      #   run: |
-      #     set -euo pipefail
-      #     IMG="${{ env.IMAGE }}:sha-${{ github.sha }}"
-      #     docker pull "$IMG" >/dev/null 2>&1 || true
-      #     docker run --rm "$IMG" bash -lc '
-      #       dpkg -s asterisk | grep -E "^Version: .*${ASTERISK_VERSION}$"
-      #       php -v
-      #     '
 
       - name: Summary
         run: |
