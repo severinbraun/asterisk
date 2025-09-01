@@ -17,10 +17,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  # Dynamisch: ghcr.io/<owner>/<repo>
-  IMAGE: ghcr.io/${{ github.repository }}
-
-  # Für compose: OWNER/REPO/TAG zentral setzen
+  IMAGE: ghcr.io/${{ github.repository }}          # ghcr.io/<owner>/<repo>
   OWNER: ${{ github.repository_owner }}
   REPO: ${{ github.event.repository.name }}
   TAG: latest
@@ -55,22 +52,18 @@ jobs:
           if [ -z "${VER}" ]; then
             echo "version=" >> $GITHUB_OUTPUT
             echo "extra_tags=" >> $GITHUB_OUTPUT
-            exit 0
+          else
+            IFS='.' read -r MAJOR MINOR PATCH <<<"${VER}"
+            {
+              echo "${{ env.IMAGE }}:v${VER}"
+              echo "${{ env.IMAGE }}:${VER}"
+              echo "${{ env.IMAGE }}:${MAJOR}.${MINOR}"
+              echo "${{ env.IMAGE }}:${MAJOR}"
+            } > /tmp/extra_tags.txt
+            echo "version=${VER}" >> $GITHUB_OUTPUT
+            echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
+            echo "TAG=${VER}" >> $GITHUB_ENV
           fi
-
-          IFS='.' read -r MAJOR MINOR PATCH <<<"${VER}"
-
-          {
-            echo "${{ env.IMAGE }}:v${VER}"
-            echo "${{ env.IMAGE }}:${VER}"
-            echo "${{ env.IMAGE }}:${MAJOR}.${MINOR}"
-            echo "${{ env.IMAGE }}:${MAJOR}"
-          } > /tmp/extra_tags.txt
-
-          echo "version=${VER}" >> $GITHUB_OUTPUT
-          echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
-          # TAG für compose (z.B. beim Release)
-          echo "TAG=${VER}" >> $GITHUB_ENV
 
       - name: Docker meta (branch/latest/sha)
         id: meta
@@ -85,6 +78,25 @@ jobs:
             org.opencontainers.image.source=${{ github.repository }}
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
+
+      # ---- NEU: gepinnte Paketversionen einlesen ----
+      - name: Read pinned versions (containers/${{ env.REPO }}/versions.env)
+        id: versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="containers/${{ env.REPO }}/versions.env"
+          if [ ! -f "$file" ]; then
+            echo "::error::versions.env fehlt unter $file (DL3008 Pinning erwartet)"
+            exit 1
+          fi
+          # Jede NON-Comment-Zeile KEY=VALUE als Output setzen
+          while IFS='=' read -r k v; do
+            [[ -z "${k}" || "${k}" =~ ^# ]] && continue
+            k="$(echo "$k" | tr -cd 'A-Z0-9_')"
+            v="$(echo "$v" | sed 's/^"\(.*\)"$/\1/')"
+            echo "$k=$v" >> "$GITHUB_OUTPUT"
+          done < "$file"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -110,10 +122,42 @@ jobs:
           build-args: |
             OWNER=${{ env.OWNER }}
             REPO=${{ env.REPO }}
+            # Alle Versions-ARGs aus versions.env (Beispiele – an deine Datei anpassen)
+            APACHE2_VERSION=${{ steps.versions.outputs.APACHE2_VERSION }}
+            MARIADB_SERVER_VERSION=${{ steps.versions.outputs.MARIADB_SERVER_VERSION }}
+            ASTERISK_VERSION=${{ steps.versions.outputs.ASTERISK_VERSION }}
+            PHP_VERSION=${{ steps.versions.outputs.PHP_VERSION }}
+            PHP_CLI_VERSION=${{ steps.versions.outputs.PHP_CLI_VERSION }}
+            PHP_COMMON_VERSION=${{ steps.versions.outputs.PHP_COMMON_VERSION }}
+            PHP_CURL_VERSION=${{ steps.versions.outputs.PHP_CURL_VERSION }}
+            PHP_MYSQL_VERSION=${{ steps.versions.outputs.PHP_MYSQL_VERSION }}
+            PHP_XML_VERSION=${{ steps.versions.outputs.PHP_XML_VERSION }}
+            PHP_MBSTRING_VERSION=${{ steps.versions.outputs.PHP_MBSTRING_VERSION }}
+            PHP_GD_VERSION=${{ steps.versions.outputs.PHP_GD_VERSION }}
+            PHP_ZIP_VERSION=${{ steps.versions.outputs.PHP_ZIP_VERSION }}
+            PHP_BCMATH_VERSION=${{ steps.versions.outputs.PHP_BCMATH_VERSION }}
+            PHP_INTL_VERSION=${{ steps.versions.outputs.PHP_INTL_VERSION }}
+            SOX_VERSION=${{ steps.versions.outputs.SOX_VERSION }}
+            LAME_VERSION=${{ steps.versions.outputs.LAME_VERSION }}
+            TINI_VERSION=${{ steps.versions.outputs.TINI_VERSION }}
+            TZDATA_VERSION=${{ steps.versions.outputs.TZDATA_VERSION }}
+            CURL_VERSION=${{ steps.versions.outputs.CURL_VERSION }}
+            CA_CERTIFICATES_VERSION=${{ steps.versions.outputs.CA_CERTIFICATES_VERSION }}
           provenance: false
           sbom: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      # (Optional) Mini-Verify – kann erweitert werden
+      # - name: Verify installed versions
+      #   run: |
+      #     set -euo pipefail
+      #     IMG="${{ env.IMAGE }}:sha-${{ github.sha }}"
+      #     docker pull "$IMG" >/dev/null 2>&1 || true
+      #     docker run --rm "$IMG" bash -lc '
+      #       dpkg -s asterisk | grep -E "^Version: .*${ASTERISK_VERSION}$"
+      #       php -v
+      #     '
 
       - name: Summary
         run: |
