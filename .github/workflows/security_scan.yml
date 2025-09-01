@@ -1,23 +1,25 @@
-name: Security Scan
+---
+name: "Security Scan"
 
 "on":
   workflow_run:
     workflows: ["Lint"]
-    types: [completed]
-  workflow_dispatch:
+    types: ["completed"]
+  workflow_dispatch: {}
 
 jobs:
-  trivy:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+  scan:
+    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - name: Trivy FS scan (repo)
-        uses: aquasecurity/trivy-action@0.28.0
+      - name: Trivy FS (CRITICAL,HIGH)
+        uses: aquasecurity/trivy-action@0.21.0
         with:
           scan-type: fs
-          format: table
-          severity: CRITICAL,HIGH
           ignore-unfixed: true
-          exit-code: 1
+          severity: CRITICAL,HIGH
+          exit-code: "1"
+          format: table
