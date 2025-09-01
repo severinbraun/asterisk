@@ -1,28 +1,10 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -e
 
-log() { echo "[$(date -Is)] $*"; }
+# Verzeichnisse sicherstellen (falls Volumes gemountet sind)
+mkdir -p /var/run/asterisk /var/log/asterisk /var/spool/asterisk
+chown -R asterisk:asterisk \
+  /var/run/asterisk /var/log/asterisk /var/spool/asterisk /var/lib/asterisk /etc/asterisk
 
-ensure_dirs() {
-  install -d -o asterisk -g asterisk /run/asterisk /var/lib/asterisk /var/log/asterisk
-}
-
-start_asterisk_fg() {
-  # -f: foreground, -U/-G: User/Group
-  exec asterisk -f -U asterisk -G asterisk -C /etc/asterisk/asterisk.conf
-}
-
-case "${1:-foreground}" in
-  foreground)
-    log "Starting Asterisk in foreground..."
-    ensure_dirs
-    start_asterisk_fg
-    ;;
-  bash|sh)
-    exec "$@"
-    ;;
-  *)
-    # beliebiger custom Befehl
-    exec "$@"
-    ;;
-esac
+# Asterisk im Vordergrund, als User/Grupppe 'asterisk'
+exec /usr/sbin/asterisk -f -U asterisk -G asterisk -vvv
