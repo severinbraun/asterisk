@@ -1,6 +1,18 @@
 #!/bin/sh
 set -eu
 
+render_tpl() {
+  src="$1"; dst="$2"
+  tmp="$(mktemp)"
+  # einfache Variablenersetzung nur für ${VAR} Platzhalter
+  sed \
+    -e "s|\${HA_AMI_PASS:-[^}]*}|${HA_AMI_PASS:-Caliba#355}|g" \
+    -e "s|\${HA_AMI_PERMIT:-[^}]*}|${HA_AMI_PERMIT:-192.168.2.0/24}|g" \
+    > "$tmp" < "$src"
+  cat "$tmp" > "$dst"
+  rm -f "$tmp"
+}
+
 # Defaults aus ENV (DoorBird & Home Assistant)
 DOORBIRD_USER="${DOORBIRD_USER:-doorbird}"
 DOORBIRD_PASS="${DOORBIRD_PASS:-Caliba#355}"
@@ -77,6 +89,11 @@ direct_media=no
 aors=${HOMEASSISTANT_USER}-aor
 auth=${HOMEASSISTANT_USER}-auth
 EOF
+
+# manager.conf rendern
+if [ -f /etc/asterisk/manager.conf ]; then
+  render_tpl /etc/asterisk/manager.conf /etc/asterisk/manager.conf
+fi
 
 # Asterisk im Vordergrund starten
 exec /usr/sbin/asterisk -f -U asterisk -G asterisk -vvv
