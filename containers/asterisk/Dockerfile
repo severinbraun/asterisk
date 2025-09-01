@@ -34,10 +34,10 @@ RUN set -eux; \
     if ! id -u asterisk >/dev/null 2>&1; then \
       adduser --disabled-password --gecos "" asterisk; \
     fi; \
-    mkdir -p /var/lib/asterisk /var/log/asterisk /etc/asterisk; \
-    chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /etc/asterisk
+    mkdir -p /var/lib/asterisk /var/log/asterisk /etc/asterisk /etc/asterisk.tmpl; \
+    chown -R asterisk:asterisk /var/lib/asterisk /var/log/asterisk /etc/asterisk /etc/asterisk.tmpl
 
-# Konfig-Templates (mit Platzhaltern) & Entrypoint
+# Konfig-Templates & Entrypoint
 COPY --chown=asterisk:asterisk etc/asterisk/ /etc/asterisk.tmpl/
 COPY --chown=asterisk:asterisk entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh
