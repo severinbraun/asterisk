@@ -2,10 +2,9 @@ name: Build & Push
 
 on:
   push:
-    branches: [main, master]
-    tags: ['v*']
-  release:
-    types: [published]
+    workflow_run:
+    workflows: ["Security Scan (Trivy)"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       version:
