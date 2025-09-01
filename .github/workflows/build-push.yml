@@ -129,27 +129,7 @@ jobs:
           build-args: |
             OWNER=${{ env.OWNER }}
             REPO=${{ env.REPO }}
-            # Alle Versions-ARGs aus versions.env (Beispiele – an deine Datei anpassen)
-            APACHE2_VERSION=${{ steps.versions.outputs.APACHE2_VERSION }}
-            MARIADB_SERVER_VERSION=${{ steps.versions.outputs.MARIADB_SERVER_VERSION }}
-            ASTERISK_VERSION=${{ steps.versions.outputs.ASTERISK_VERSION }}
-            PHP_VERSION=${{ steps.versions.outputs.PHP_VERSION }}
-            PHP_CLI_VERSION=${{ steps.versions.outputs.PHP_CLI_VERSION }}
-            PHP_COMMON_VERSION=${{ steps.versions.outputs.PHP_COMMON_VERSION }}
-            PHP_CURL_VERSION=${{ steps.versions.outputs.PHP_CURL_VERSION }}
-            PHP_MYSQL_VERSION=${{ steps.versions.outputs.PHP_MYSQL_VERSION }}
-            PHP_XML_VERSION=${{ steps.versions.outputs.PHP_XML_VERSION }}
-            PHP_MBSTRING_VERSION=${{ steps.versions.outputs.PHP_MBSTRING_VERSION }}
-            PHP_GD_VERSION=${{ steps.versions.outputs.PHP_GD_VERSION }}
-            PHP_ZIP_VERSION=${{ steps.versions.outputs.PHP_ZIP_VERSION }}
-            PHP_BCMATH_VERSION=${{ steps.versions.outputs.PHP_BCMATH_VERSION }}
-            PHP_INTL_VERSION=${{ steps.versions.outputs.PHP_INTL_VERSION }}
-            SOX_VERSION=${{ steps.versions.outputs.SOX_VERSION }}
-            LAME_VERSION=${{ steps.versions.outputs.LAME_VERSION }}
-            TINI_VERSION=${{ steps.versions.outputs.TINI_VERSION }}
-            TZDATA_VERSION=${{ steps.versions.outputs.TZDATA_VERSION }}
-            CURL_VERSION=${{ steps.versions.outputs.CURL_VERSION }}
-            CA_CERTIFICATES_VERSION=${{ steps.versions.outputs.CA_CERTIFICATES_VERSION }}
+            $(cat containers/${{ env.REPO }}/versions.env | xargs)
           provenance: false
           sbom: false
           cache-from: type=gha
