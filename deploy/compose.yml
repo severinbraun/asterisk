@@ -1,4 +1,3 @@
----
 services:
   asterisk:
     image: ghcr.io/severinbraun/asterisk:latest
