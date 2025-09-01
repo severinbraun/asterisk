@@ -1,22 +1,14 @@
 services:
   asterisk:
-    image: ghcr.io/severinbraun/asterisk:latest
+    image: ghcr.io/${OWNER}/${REPO}:latest
     container_name: asterisk
     restart: unless-stopped
     network_mode: "host"
     environment:
-      - TZ=Europe/Berlin
+      EXTERNAL_ADDR: ${EXTERNAL_ADDR}   # z.B. 203.0.113.10 oder my.dyndns.tld
+      LOCAL_NET: ${LOCAL_NET}           # z.B. 192.168.1.0/255.255.255.0
     volumes:
-      - ./configs/asterisk/asterisk.conf:/etc/asterisk/asterisk.conf:ro
-      - ./configs/asterisk/modules.conf:/etc/asterisk/modules.conf:ro
-      - ./configs/asterisk/sip.conf:/etc/asterisk/sip.conf:ro
-      - ./configs/asterisk/rtp.conf:/etc/asterisk/rtp.conf:ro
-      - ./configs/asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
-      - ./configs/asterisk/logger.conf:/etc/asterisk/logger.conf:ro
-      - asterisk-spool:/var/spool/asterisk
-      - asterisk-log:/var/log/asterisk
-      - asterisk-lib:/var/lib/asterisk
-volumes:
-  asterisk-spool:
-  asterisk-log:
-  asterisk-lib:
+      - ./containers/asterisk/etc-asterisk:/etc/asterisk:ro
+      - ./asterisk-spool:/var/spool/asterisk
+      - ./asterisk-log:/var/log/asterisk
+      - ./asterisk-lib:/var/lib/asterisk
