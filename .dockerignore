@@ -1,0 +1,3 @@
+# nur zur Sicherheit – hält das Build-Context schlank
+*.md
+*.log
