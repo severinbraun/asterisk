@@ -1,7 +1,7 @@
 ---
 services:
   asterisk:
-    image: ghcr.io/severinbraun}/asterisk:latest
+    image: ghcr.io/severinbraun/asterisk:latest
     container_name: asterisk
     restart: unless-stopped
     network_mode: "host"
