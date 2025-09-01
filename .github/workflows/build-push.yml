@@ -1,5 +1,4 @@
 name: Build & Push
-
 on:
   workflow_run:
     workflows: ["Security Scan"]
@@ -25,7 +24,6 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout (mit Tags)
         uses: actions/checkout@v4
@@ -39,34 +37,27 @@ jobs:
         run: |
           set -euo pipefail
           VER_INPUT="${{ github.event.inputs.version || '' }}"
-          VER_TAG=""
-          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
-            VER_TAG="${GITHUB_REF_NAME#v}"
+          VER=""
+          if [ -n "${VER_INPUT}" ]; then VER="${VER_INPUT}"; fi
+          if [ -z "${VER}" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then VER="${GITHUB_REF_NAME#v}"; fi
+          if [ -z "${VER}" ] && [ "${{ github.event_name }}" = "release" ]; then VER="${{ github.event.release.tag_name#v }}"; fi
+          if [ -n "${VER}" ]; then
+            IFS='.' read -r MAJOR MINOR PATCH <<EOF
+${VER}
+EOF
+            {
+              echo "${{ env.IMAGE }}:v${VER}"
+              echo "${{ env.IMAGE }}:${VER}"
+              echo "${{ env.IMAGE }}:${MAJOR}.${MINOR}"
+              echo "${{ env.IMAGE }}:${MAJOR}"
+            } > /tmp/extra_tags.txt
+            echo "version=${VER}" >> "$GITHUB_OUTPUT"
+            echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> "$GITHUB_OUTPUT"
+            echo "TAG=${VER}" >> "$GITHUB_ENV"
+          else
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "extra_tags=" >> "$GITHUB_OUTPUT"
           fi
-          if [ -z "${VER_TAG}" ] && [ "${{ github.event_name }}" = "release" ]; then
-            T="${{ github.event.release.tag_name }}"
-            VER_TAG="${T#v}"
-          fi
-          VER="${VER_INPUT:-$VER_TAG}"
-
-          if [ -z "${VER}" ]; then
-            echo "version=" >> $GITHUB_OUTPUT
-            echo "extra_tags=" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          IFS='.' read -r MAJOR MINOR PATCH <<<"${VER}"
-
-          {
-            echo "${{ env.IMAGE }}:v${VER}"
-            echo "${{ env.IMAGE }}:${VER}"
-            echo "${{ env.IMAGE }}:${MAJOR}.${MINOR}"
-            echo "${{ env.IMAGE }}:${MAJOR}"
-          } > /tmp/extra_tags.txt
-
-          echo "version=${VER}" >> $GITHUB_OUTPUT
-          echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> $GITHUB_OUTPUT
-          echo "TAG=${VER}" >> $GITHUB_ENV
 
       - name: Docker meta (branch/latest/sha)
         id: meta
@@ -92,28 +83,21 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # >>> NEU: versions.env automatisch als build-args injizieren
       - name: Build args aus versions.env laden
         id: args
         shell: bash
         run: |
           set -euo pipefail
-          # Datei existiert? (optional: fail soft)
           FILE="containers/${{ env.REPO }}/versions.env"
-          if [ ! -f "$FILE" ]; then
-            echo "Hinweis: $FILE nicht gefunden – es werden nur OWNER/REPO übergeben."
-          fi
-
           {
-            echo "args<<'EOF'"
+            echo 'args<<__GHA_EOF__'
             echo "OWNER=${{ env.OWNER }}"
             echo "REPO=${{ env.REPO }}"
             if [ -f "$FILE" ]; then
-              # Comments & Leerzeilen entfernen
-              grep -v '^\s*#' "$FILE" | sed '/^\s*$/d'
+              grep -v '^[[:space:]]*#' "$FILE" | sed '/^[[:space:]]*$/d'
             fi
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
+            echo '__GHA_EOF__'
+          } >>"$GITHUB_OUTPUT"
 
       - name: Build & Push (multi-arch)
         uses: docker/build-push-action@v6
