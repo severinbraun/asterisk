@@ -1,35 +1,83 @@
 #!/bin/sh
-# POSIX sh: rendert Templates aus /etc/asterisk.tmpl nach /etc/asterisk
 set -eu
 
-tmpl_dir="/etc/asterisk.tmpl"
-dst_dir="/etc/asterisk"
+# Defaults aus ENV (für DoorBird & Home Assistant)
+DOORBIRD_USER="${DOORBIRD_USER:-doorbird}"
+DOORBIRD_PASS="${DOORBIRD_PASS:-Caliba#355}"
+HOMEASSISTANT_USER="${HOMEASSISTANT_USER:-homeassistant}"
+HOMEASSISTANT_PASS="${HOMEASSISTANT_PASS:-Caliba#355}"
 
-if [ ! -d "$dst_dir" ]; then
-  mkdir -p "$dst_dir"
-fi
+# Verzeichnisse sicherstellen
+mkdir -p /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk
+# Rechte (wir laufen bereits als User 'asterisk')
+chown -R asterisk:asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk
 
-# Dateien rendern (Platzhalter: __FOO__)
-for f in asterisk.conf extensions.conf logger.conf modules.conf pjsip.conf rtp.conf sip.conf; do
-  src="$tmpl_dir/$f"
-  dst="$dst_dir/$f"
-  if [ -f "$src" ]; then
-    sed \
-      -e "s|__DOORBIRD_USER__|${DOORBIRD_USER}|g" \
-      -e "s|__DOORBIRD_PASS__|${DOORBIRD_PASS}|g" \
-      -e "s|__HA_USER__|${HA_USER}|g" \
-      -e "s|__HA_PASS__|${HA_PASS}|g" \
-      -e "s|__RTP_START__|${RTP_START}|g" \
-      -e "s|__RTP_END__|${RTP_END}|g" \
-      -e "s|__LOG_LEVEL__|${ASTERISK_LOG_LEVEL}|g" \
-      "$src" > "$dst"
-  fi
-done
+# Runtime-Credentials als separate Includes schreiben (damit /etc/asterisk read-only bleiben kann)
+# chan_sip
+cat > /run/asterisk/creds_sip.conf <<EOF
+[${DOORBIRD_USER}]
+type=friend
+host=dynamic
+secret=${DOORBIRD_PASS}
+context=public
+disallow=all
+allow=ulaw,alaw,g722
+directmedia=no
+nat=force_rport,comedia
+insecure=port,invite
 
-# Log-Verzeichnis sicherstellen
-if [ ! -d /var/log/asterisk ]; then
-  mkdir -p /var/log/asterisk
-fi
+[${HOMEASSISTANT_USER}]
+type=friend
+host=dynamic
+secret=${HOMEASSISTANT_PASS}
+context=public
+disallow=all
+allow=ulaw,alaw,g722
+directmedia=no
+nat=force_rport,comedia
+insecure=port,invite
+EOF
 
-# Asterisk starten; CMD-Args (z.B. "-f") werden durchgereicht
-exec /usr/sbin/asterisk "$@"
+# PJSIP (Endpoint/AOR/Auth Triplets)
+cat > /run/asterisk/creds_pjsip.conf <<EOF
+[${DOORBIRD_USER}-auth]
+type=auth
+auth_type=userpass
+username=${DOORBIRD_USER}
+password=${DOORBIRD_PASS}
+
+[${DOORBIRD_USER}-aor]
+type=aor
+max_contacts=1
+
+[${DOORBIRD_USER}-endpoint]
+type=endpoint
+context=public
+disallow=all
+allow=ulaw,alaw,g722
+direct_media=no
+aors=${DOORBIRD_USER}-aor
+auth=${DOORBIRD_USER}-auth
+
+[${HOMEASSISTANT_USER}-auth]
+type=auth
+auth_type=userpass
+username=${HOMEASSISTANT_USER}
+password=${HOMEASSISTANT_PASS}
+
+[${HOMEASSISTANT_USER}-aor]
+type=aor
+max_contacts=2
+
+[${HOMEASSISTANT_USER}-endpoint]
+type=endpoint
+context=public
+disallow=all
+allow=ulaw,alaw,g722
+direct_media=no
+aors=${HOMEASSISTANT_USER}-aor
+auth=${HOMEASSISTANT_USER}-auth
+EOF
+
+# Asterisk im Vordergrund starten
+exec /usr/sbin/asterisk -f -U asterisk -G asterisk -vvv
