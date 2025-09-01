@@ -30,7 +30,6 @@ RUN set -eux; \
       ca-certificates=${CA_CERTIFICATES_VERSION} \
       curl=${CURL_VERSION} \
       openssl \
-      ca-certificates \
       tini=${TINI_VERSION} \
       asterisk=${ASTERISK_VERSION}; \
     rm -rf /var/lib/apt/lists/*
@@ -39,38 +38,35 @@ RUN set -eux; \
 ARG ASTERISK_CN=asterisk.veenpark.de
 ARG ASTERISK_SAN=DNS:asterisk.veenpark.de,IP:192.168.2.48
 
-# Self-signed Zertifikat + Key erzeugen
+# Verzeichnisse & Rechte + Self-signed Zertifikat/Key erstellen
 RUN set -eux; \
-    mkdir -p /out; \
-    printf '[req]\n'                          >  /tmp/openssl.cnf; \
-    printf 'distinguished_name=req\n'         >> /tmp/openssl.cnf; \
-    printf 'x509_extensions=v3_req\n'         >> /tmp/openssl.cnf; \
-    printf 'prompt=no\n'                      >> /tmp/openssl.cnf; \
-    printf '[req_distinguished_name]\n'       >> /tmp/openssl.cnf; \
-    printf 'CN=%s\n' "${ASTERISK_CN}"         >> /tmp/openssl.cnf; \
-    printf '[v3_req]\n'                       >> /tmp/openssl.cnf; \
-    printf 'subjectAltName=%s\n' "${ASTERISK_SAN}" >> /tmp/openssl.cnf; \
+    mkdir -p /etc/asterisk/keys /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk; \
+    chown -R asterisk:asterisk /etc/asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk; \
+    umask 077; \
+    cat > /tmp/openssl.cnf <<EOF
+[req]
+distinguished_name = req
+x509_extensions = v3_req
+prompt = no
+[req_distinguished_name]
+CN = ${ASTERISK_CN}
+[v3_req]
+subjectAltName = ${ASTERISK_SAN}
+EOF
     openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
-      -keyout /out/asterisk.key -out /out/asterisk.crt \
+      -keyout /etc/asterisk/keys/asterisk.key \
+      -out    /etc/asterisk/keys/asterisk.crt \
       -config /tmp/openssl.cnf -subj "/CN=${ASTERISK_CN}"; \
-    chmod 600 /out/asterisk.key; chmod 644 /out/asterisk.crt
+    chown asterisk:asterisk /etc/asterisk/keys/asterisk.*; \
+    chmod 600 /etc/asterisk/keys/asterisk.key; \
+    chmod 644 /etc/asterisk/keys/asterisk.crt; \
+    rm -f /tmp/openssl.cnf
 
-# Verzeichnisse & Rechte
-RUN set -eux; \
-    mkdir -p /etc/asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk; \
-    chown -R asterisk:asterisk /etc/asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk
-
-# Zertifikate aus Stage 1 übernehmen (ohne openssl im Final-Image)
-COPY --from=certs /out/asterisk.crt /etc/asterisk/keys/asterisk.crt
-COPY --from=certs /out/asterisk.key /etc/asterisk/keys/asterisk.key
-RUN set -eux; chown asterisk:asterisk /etc/asterisk/keys/*; chmod 600 /etc/asterisk/keys/asterisk.key
-
-# Wichtig: da Build-Kontext = containers/asterisk ist,
-# brauchen wir KEIN "containers/asterisk/" im Pfad!
+# Wichtig: Build-Kontext = containers/asterisk → keine Präfixe nötig
 COPY --chown=asterisk:asterisk entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chown=asterisk:asterisk etc/asterisk/ /etc/asterisk/
 
-RUN chmod +x /usr/local/bin/entrypoint.sh && chown asterisk:asterisk /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 5060/udp 5061/udp
 EXPOSE 8088/tcp 8089/tcp
