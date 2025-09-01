@@ -69,6 +69,7 @@ COPY --chown=asterisk:asterisk etc/asterisk/ /etc/asterisk/
 RUN chmod +x /usr/local/bin/entrypoint.sh
 
 EXPOSE 5060/udp 5061/udp
+EXPOSE 5060/tcp 5061/tcp
 EXPOSE 8088/tcp 8089/tcp
 EXPOSE 10000-20000/udp
 
