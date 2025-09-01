@@ -40,8 +40,8 @@ RUN set -eux; \
 
 # Wichtig: da Build-Kontext = containers/asterisk ist,
 # brauchen wir KEIN "containers/asterisk/" im Pfad!
-COPY entrypoint.sh /usr/local/bin/entrypoint.sh
-COPY etc/asterisk/ /etc/asterisk/
+COPY --chown=asterisk:asterisk entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chown=asterisk:asterisk etc/asterisk/ /etc/asterisk/
 
 RUN chmod +x /usr/local/bin/entrypoint.sh && chown asterisk:asterisk /usr/local/bin/entrypoint.sh
 
