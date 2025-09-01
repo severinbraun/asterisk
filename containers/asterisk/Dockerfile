@@ -12,7 +12,6 @@ ARG TINI_VERSION=0.19.0-1
 ARG TZDATA_VERSION=2025b-0ubuntu0.24.04.1
 ARG CURL_VERSION=8.5.0-2ubuntu10.6
 ARG CA_CERTIFICATES_VERSION=20240203
-ARG OPENSSL_VERSION=3.0.13-0ubuntu3.6
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Europe/Berlin
@@ -30,15 +29,41 @@ RUN set -eux; \
       tzdata=${TZDATA_VERSION} \
       ca-certificates=${CA_CERTIFICATES_VERSION} \
       curl=${CURL_VERSION} \
-      openssl=${OPENSSL_VERSION} \
+      openssl \
+      ca-certificates \
       tini=${TINI_VERSION} \
       asterisk=${ASTERISK_VERSION}; \
     rm -rf /var/lib/apt/lists/*
+
+# CN/SAN steuerbar (Defaults passen für LAN/WSS-Tests)
+ARG ASTERISK_CN=asterisk.veenpark.de
+ARG ASTERISK_SAN=DNS:asterisk.veenpark.de,IP:192.168.2.48
+
+# Self-signed Zertifikat + Key erzeugen
+RUN set -eux; \
+    mkdir -p /out; \
+    printf '[req]\n'                          >  /tmp/openssl.cnf; \
+    printf 'distinguished_name=req\n'         >> /tmp/openssl.cnf; \
+    printf 'x509_extensions=v3_req\n'         >> /tmp/openssl.cnf; \
+    printf 'prompt=no\n'                      >> /tmp/openssl.cnf; \
+    printf '[req_distinguished_name]\n'       >> /tmp/openssl.cnf; \
+    printf 'CN=%s\n' "${ASTERISK_CN}"         >> /tmp/openssl.cnf; \
+    printf '[v3_req]\n'                       >> /tmp/openssl.cnf; \
+    printf 'subjectAltName=%s\n' "${ASTERISK_SAN}" >> /tmp/openssl.cnf; \
+    openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
+      -keyout /out/asterisk.key -out /out/asterisk.crt \
+      -config /tmp/openssl.cnf -subj "/CN=${ASTERISK_CN}"; \
+    chmod 600 /out/asterisk.key; chmod 644 /out/asterisk.crt
 
 # Verzeichnisse & Rechte
 RUN set -eux; \
     mkdir -p /etc/asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk; \
     chown -R asterisk:asterisk /etc/asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk
+
+# Zertifikate aus Stage 1 übernehmen (ohne openssl im Final-Image)
+COPY --from=certs /out/asterisk.crt /etc/asterisk/keys/asterisk.crt
+COPY --from=certs /out/asterisk.key /etc/asterisk/keys/asterisk.key
+RUN set -eux; chown asterisk:asterisk /etc/asterisk/keys/*; chmod 600 /etc/asterisk/keys/asterisk.key
 
 # Wichtig: da Build-Kontext = containers/asterisk ist,
 # brauchen wir KEIN "containers/asterisk/" im Pfad!
@@ -52,7 +77,5 @@ EXPOSE 8088/tcp 8089/tcp
 EXPOSE 10000-20000/udp
 
 STOPSIGNAL SIGTERM
-
 USER asterisk
-
 ENTRYPOINT ["/usr/bin/tini","--","/usr/local/bin/entrypoint.sh"]
