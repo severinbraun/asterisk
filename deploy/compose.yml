@@ -12,9 +12,12 @@ services:
       - RTP_START=${RTP_START:-10000}
       - RTP_END=${RTP_END:-20000}
       - ASTERISK_LOG_LEVEL=${ASTERISK_LOG_LEVEL:-notice}
+    # WICHTIG: wir mounten die HOST-Config als Templates!
+    # Der Entrypoint rendert daraus /etc/asterisk.
     volumes:
       - asterisk-lib:/var/lib/asterisk
       - asterisk-log:/var/log/asterisk
+      - ./config:/etc/asterisk.tmpl
 volumes:
   asterisk-lib:
   asterisk-log:
