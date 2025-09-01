@@ -4,7 +4,7 @@
 [![Build & Push](https://github.com/severinbraun/asterisk/actions/workflows/build-push.yml/badge.svg)](https://github.com/severinbraun/asterisk/actions/workflows/build-push.yml)
 [![Security Scan](https://github.com/severinbraun/asterisk/actions/workflows/security_scan.yml/badge.svg)](https://github.com/severinbraun/asterisk/actions/workflows/security_scan.yml)
 
-**Image:** `ghcr.io/severinbraun/asterisk:latest`
+**Image:** `ghcr.io/${{ github.repository }}:latest`
 
 ```bash
 docker pull ghcr.io/severinbraun/asterisk:latest
