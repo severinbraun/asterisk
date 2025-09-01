@@ -2,44 +2,42 @@
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-# Diese ARGs kommen aus CI (build-args). Defaults erlauben lokalen Build.
-ARG OWNER="local"
-ARG REPO="asterisk"
+# Nur für Labels – verhindern "UndefinedVar"-Lint-Fehler, falls nicht übergeben
+ARG OWNER=unknown
+ARG REPO=asterisk
 
-LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
-      org.opencontainers.image.title="${REPO}" \
-      org.opencontainers.image.licenses="MIT"
-
-# Basis: Asterisk + minimal Tools
+# Basis-Pakete + Asterisk + gosu (zum Privilege-Drop im Entrypoint)
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      asterisk tzdata ca-certificates dumb-init; \
+      asterisk \
+      gosu \
+      ca-certificates \
+      tzdata \
+      curl; \
     rm -rf /var/lib/apt/lists/*
 
-# User/Dirs vorbereiten (User existiert in Ubuntu meist bereits)
-RUN set -eux; \
-    if ! id -u asterisk >/dev/null 2>&1; then \
-      adduser --system --group --home /var/lib/asterisk asterisk; \
-    fi; \
-    mkdir -p /var/run/asterisk /var/log/asterisk /var/spool/asterisk; \
-    chown -R asterisk:asterisk \
-      /var/run/asterisk /var/log/asterisk /var/spool/asterisk /var/lib/asterisk
+# Service-User sicherstellen (Fehler vermeiden, falls schon vorhanden)
+RUN id -u asterisk >/dev/null 2>&1 || adduser --disabled-password --gecos "" asterisk
 
-# Minimale Configs
-COPY etc/asterisk/ /etc/asterisk/
-RUN set -eux; chown -R asterisk:asterisk /etc/asterisk
+# Konfig (nur das, was du überschreiben willst)
+# -> modules.conf legen wir hier ab
+COPY etc/asterisk/modules.conf /etc/asterisk/modules.conf
 
-# Healthcheck – Container gilt als healthy, wenn Asterisk läuft
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
-  CMD asterisk -rx 'core show uptime' >/dev/null 2>&1 || exit 1
-
-# Entrypoint
+# Entrypoint (legt Laufzeit-Verzeichnisse an, chowned sie und startet Asterisk als 'asterisk')
 COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# Ports: SIP (UDP/TCP) + TLS (optional) + RTP
-EXPOSE 5060/udp 5060/tcp 5061/tcp 10000-10100/udp
+# OCI-Labels
+LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
+      org.opencontainers.image.title="asterisk" \
+      org.opencontainers.image.description="Minimal Asterisk (Ubuntu 24.04) with gosu entrypoint"
 
-ENTRYPOINT ["/usr/bin/dumb-init","--"]
-CMD ["/entrypoint.sh"]
+# SIP + RTP
+EXPOSE 5060/udp 5061/tcp 5061/udp 10000-20000/udp
+
+# Optional, aber praktisch
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
+  CMD /usr/sbin/asterisk -rx 'core show uptime' >/dev/null 2>&1 || exit 1
+
+ENTRYPOINT ["/entrypoint.sh"]
