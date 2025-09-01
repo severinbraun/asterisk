@@ -12,6 +12,7 @@ ARG TINI_VERSION=0.19.0-1
 ARG TZDATA_VERSION=2025b-0ubuntu0.24.04.1
 ARG CURL_VERSION=8.5.0-2ubuntu10.6
 ARG CA_CERTIFICATES_VERSION=20240203
+ARG OPENSSL_VERSION=3.0.13-0ubuntu3.4
 
 ENV DEBIAN_FRONTEND=noninteractive \
     TZ=Europe/Berlin
@@ -29,6 +30,7 @@ RUN set -eux; \
       tzdata=${TZDATA_VERSION} \
       ca-certificates=${CA_CERTIFICATES_VERSION} \
       curl=${CURL_VERSION} \
+      openssl=${OPENSSL_VERSION} \
       tini=${TINI_VERSION} \
       asterisk=${ASTERISK_VERSION}; \
     rm -rf /var/lib/apt/lists/*
@@ -46,7 +48,8 @@ COPY --chown=asterisk:asterisk etc/asterisk/ /etc/asterisk/
 RUN chmod +x /usr/local/bin/entrypoint.sh && chown asterisk:asterisk /usr/local/bin/entrypoint.sh
 
 EXPOSE 5060/udp 5061/udp
-EXPOSE 10000-10100/udp
+EXPOSE 8088/tcp 8089/tcp
+EXPOSE 10000-20000/udp
 
 STOPSIGNAL SIGTERM
 
