@@ -22,7 +22,8 @@ LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
       org.opencontainers.image.url="https://github.com/${OWNER}/${REPO}" \
       org.opencontainers.image.description="Asterisk on Ubuntu 24.04 with pinned package versions"
 
-# System + Asterisk (alle Versionen streng gepinnt)
+# hadolint ignore=DL3008
+# System + Asterisk (alle Versionen streng gepinnt; openssl bewusst ungepinnt)
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
