@@ -33,26 +33,23 @@ RUN set -eux; \
       asterisk=${ASTERISK_VERSION}; \
     rm -rf /var/lib/apt/lists/*
 
-# Verzeichnisse & Rechte (der Debian-Paketbau legt User 'asterisk' bereits an)
+# Verzeichnisse & Rechte
 RUN set -eux; \
     mkdir -p /etc/asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk; \
     chown -R asterisk:asterisk /etc/asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk
 
-# Basis-Konfiguration (kann in Prod per Volume read-only überschrieben werden)
-COPY containers/asterisk/etc/asterisk/ /etc/asterisk/
+# Wichtig: da Build-Kontext = containers/asterisk ist,
+# brauchen wir KEIN "containers/asterisk/" im Pfad!
+COPY entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY etc/asterisk/ /etc/asterisk/
 
-# Entry-Point Script (POSIX sh)
-COPY containers/asterisk/entrypoint.sh /usr/local/bin/entrypoint.sh
 RUN chmod +x /usr/local/bin/entrypoint.sh && chown asterisk:asterisk /usr/local/bin/entrypoint.sh
 
-# Dokumentarische Exposes (bei host network wirkungslos)
 EXPOSE 5060/udp 5061/udp
 EXPOSE 10000-10100/udp
 
 STOPSIGNAL SIGTERM
 
-# Letzter Nutzer NICHT root (Hadolint DL3002)
 USER asterisk
 
-# Tini als sauberes Init
 ENTRYPOINT ["/usr/bin/tini","--","/usr/local/bin/entrypoint.sh"]
