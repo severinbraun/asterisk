@@ -32,7 +32,14 @@ jobs:
         with:
           fetch-depth: 0
           fetch-tags: true
-
+      - name: Check available package versions (Ubuntu 24.04)
+        run: |
+          set -eux
+          apt-get update
+          apt-cache policy apache2 mariadb-server asterisk \
+            php php-cli php-common php-curl php-mysql php-xml \
+            php-mbstring php-gd php-zip php-bcmath php-intl \
+            sox lame tini tzdata curl ca-certificates
       - name: Resolve Version (Tag/Release/Manual)
         id: ver
         shell: bash
