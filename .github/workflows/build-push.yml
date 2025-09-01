@@ -1,10 +1,8 @@
----
-name: "Build & Push"
-
+name: Build & Push
 "on":
   workflow_run:
     workflows: ["Security Scan"]
-    types: ["completed"]
+    types: [completed]
   workflow_dispatch:
     inputs:
       version:
@@ -25,24 +23,24 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' || github.event_name == 'workflow_dispatch' }}
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout (mit Tags)
+      - name: Checkout (with tags)
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           fetch-tags: true
 
-      - name: Resolve Version (Tag/Release/Manual)
+      - name: Resolve Version (tag/release/manual)
         id: ver
         shell: bash
         run: |
           set -euo pipefail
           VER_INPUT="${{ github.event.inputs.version || '' }}"
           VER_TAG=""
-          if [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+          if [ "${GITHUB_REF_TYPE-}" = "tag" ]; then
             VER_TAG="${GITHUB_REF_NAME#v}"
           fi
           if [ -z "${VER_TAG}" ] && [ "${{ github.event_name }}" = "release" ]; then
@@ -52,14 +50,16 @@ jobs:
           VER="${VER_INPUT:-$VER_TAG}"
 
           if [ -z "${VER}" ]; then
-            echo "version=" >> "$GITHUB_OUTPUT"
-            echo "extra_tags=" >> "$GITHUB_OUTPUT"
+            {
+              echo "version="
+              echo "extra_tags="
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          IFS='.' read -r MAJOR MINOR PATCH <<EOF_VER
-${VER}
-EOF_VER
+          IFS='.' read -r MAJOR MINOR PATCH <<EOF
+          ${VER}
+          EOF
 
           {
             echo "${{ env.IMAGE }}:v${VER}"
@@ -69,7 +69,8 @@ EOF_VER
           } > /tmp/extra_tags.txt
 
           echo "version=${VER}" >> "$GITHUB_OUTPUT"
-          echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> "$GITHUB_OUTPUT"
+          ETAGS="$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')"
+          echo "extra_tags=${ETAGS}" >> "$GITHUB_OUTPUT"
           echo "TAG=${VER}" >> "$GITHUB_ENV"
 
       - name: Docker meta (branch/latest/sha)
@@ -86,10 +87,10 @@ EOF_VER
             org.opencontainers.image.revision=${{ github.sha }}
             org.opencontainers.image.version=${{ github.ref_name }}
 
-      - name: Setup QEMU
+      - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
-      - name: Setup Buildx
+      - name: Set up Buildx
         uses: docker/setup-buildx-action@v3
 
       - name: Login to GHCR
@@ -99,27 +100,11 @@ EOF_VER
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build args aus versions.env
-        id: args
-        shell: bash
-        run: |
-          set -euo pipefail
-          DELIM="__ARGS_$(dd if=/dev/urandom bs=6 count=1 2>/dev/null | hexdump -v -e '/1 "%02x"')__"
-          {
-            echo "args<<$DELIM"
-            echo "OWNER=${{ env.OWNER }}"
-            echo "REPO=${{ env.REPO }}"
-            if [ -f containers/asterisk/versions.env ]; then
-              grep -v '^[[:space:]]*#' containers/asterisk/versions.env | sed '/^[[:space:]]*$/d'
-            fi
-            echo "$DELIM"
-          } >> "$GITHUB_OUTPUT"
-
       - name: Build & Push (multi-arch)
         uses: docker/build-push-action@v6
         with:
-          context: .
-          file: containers/asterisk/Dockerfile
+          context: containers/${{ env.REPO }}
+          file: containers/${{ env.REPO }}/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
@@ -127,7 +112,8 @@ EOF_VER
             ${{ steps.ver.outputs.extra_tags }}
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
-            ${{ steps.args.outputs.args }}
+            OWNER=${{ env.OWNER }}
+            REPO=${{ env.REPO }}
           provenance: false
           sbom: false
           cache-from: type=gha
@@ -136,7 +122,9 @@ EOF_VER
       - name: Summary
         run: |
           echo "Pushed tags:"
-          printf '%s\n' "${{ steps.meta.outputs.tags }}" | tr ' ' '\n' | sed 's/^/- /'
+          echo "${{ steps.meta.outputs.tags }}" \
+            | tr ' ' '\n' | sed 's/^/- /'
           if [ -n "${{ steps.ver.outputs.extra_tags }}" ]; then
-            echo "${{ steps.ver.outputs.extra_tags }}" | tr ',' '\n' | sed 's/^/- /'
+            echo "${{ steps.ver.outputs.extra_tags }}" \
+              | tr ',' '\n' | sed 's/^/- /'
           fi
