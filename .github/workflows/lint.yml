@@ -18,4 +18,4 @@ jobs:
       - name: Hadolint (Dockerfile Lint)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: containers/${{ github.repository }}/Dockerfile
+          dockerfile: containers/${{ github.event.repository.name }} /Dockerfile
