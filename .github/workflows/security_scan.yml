@@ -12,7 +12,7 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE: ${{ github.repository_owner }}/hello-world:latest
+  IMAGE: ${{ github.repository_owner }}/${{ github.event.repository.name }}:latest
 
 jobs:
   trivy-image:
