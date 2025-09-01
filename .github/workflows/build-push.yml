@@ -1,4 +1,4 @@
-name: Build & Push (Mono-Repo)
+name: Build & Push
 
 on:
   push:
