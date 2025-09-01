@@ -1,49 +1,47 @@
 # syntax=docker/dockerfile:1.9
 FROM ubuntu:24.04
 
-LABEL org.opencontainers.image.title="asterisk" \
-      org.opencontainers.image.description="Minimal Asterisk with chan_sip and chan_pjsip" \
+ARG DEBIAN_FRONTEND=noninteractive
+# Diese ARGs kommen aus der CI (build-args) – hier nur Defaults, damit lokale Builds gehen.
+ARG OWNER="local"
+ARG REPO="asterisk"
+
+# Labels ohne undefined-var Warnungen
+LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
+      org.opencontainers.image.title="${REPO}" \
       org.opencontainers.image.licenses="MIT"
 
-# Versionen kommen idealerweise aus versions.env (per build-args aus CI)
-ARG ASTERISK_VERSION=1:20.6.0~dfsg+~cs6.13.40431414-2build5
-ARG TINI_VERSION=0.19.0-1
-ARG TZDATA_VERSION=2025b-0ubuntu0.24.04.1
-ARG CURL_VERSION=8.5.0-2ubuntu10.6
-ARG CA_CERTIFICATES_VERSION=20240203
-
-ENV DEBIAN_FRONTEND=noninteractive
-
-# Asterisk + minimale Tools
+# asterisk + minimal tools
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      asterisk=${ASTERISK_VERSION} \
-      tini=${TINI_VERSION} \
-      tzdata=${TZDATA_VERSION} \
-      curl=${CURL_VERSION} \
-      ca-certificates=${CA_CERTIFICATES_VERSION}; \
+      asterisk tzdata ca-certificates dumb-init; \
     rm -rf /var/lib/apt/lists/*
 
-# Verzeichnisse vorbereiten & Ownership – asterisk-User kommt aus dem Paket
+# Nutzer nur anlegen, wenn nicht vorhanden (Ubuntu bringt oft 'asterisk' schon mit)
 RUN set -eux; \
-    mkdir -p /etc/asterisk /var/lib/asterisk /var/log/asterisk; \
-    chown -R asterisk:asterisk /etc/asterisk /var/lib/asterisk /var/log/asterisk
+    if ! id -u asterisk >/dev/null 2>&1; then \
+      adduser --system --group --home /var/lib/asterisk asterisk; \
+    fi
 
-# Volumes (optional, für Persistenz/Bind-Mounts)
-VOLUME ["/etc/asterisk", "/var/lib/asterisk", "/var/log/asterisk"]
+# Runtime/Log/Spool vorbereiten
+RUN set -eux; \
+    mkdir -p /var/run/asterisk /var/log/asterisk /var/spool/asterisk; \
+    chown -R asterisk:asterisk /var/run/asterisk /var/log/asterisk /var/spool/asterisk /var/lib/asterisk
 
-# SIP/RTP
-EXPOSE 5060/udp 5061/udp 10000-20000/udp
+# Minimale, funktionierende Configs einspielen
+COPY etc/asterisk/ /etc/asterisk/
+RUN set -eux; chown -R asterisk:asterisk /etc/asterisk
 
-# Nicht als root laufen
-USER asterisk
-WORKDIR /var/lib/asterisk
+# kleiner Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
+  CMD asterisk -rx 'core show uptime' >/dev/null 2>&1 || exit 1
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=5s \
-  CMD /usr/sbin/asterisk -rx "core show version" >/dev/null 2>&1 || exit 1
+# Entrypoint
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
-# Tini als PID 1
-ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["asterisk", "-f", "-U", "asterisk"]
+EXPOSE 5060/udp 5060/tcp 5061/tcp 10000-10100/udp
+
+ENTRYPOINT ["/usr/bin/dumb-init","--"]
+CMD ["/entrypoint.sh"]
