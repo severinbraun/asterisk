@@ -1,6 +1,6 @@
 REGISTRY ?= ghcr.io
 OWNER    ?= $(shell echo $$GITHUB_REPOSITORY_OWNER)
-APP      ?= asterisk
+APP      ?= $(REPO)
 TAG      ?= $(shell git rev-parse --short HEAD)
 IMG      := $(REGISTRY)/$(OWNER)/$(APP):$(TAG)
 
