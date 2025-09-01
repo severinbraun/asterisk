@@ -27,7 +27,7 @@ jobs:
           severity: warning
 
       - name: YAML Lint
-        uses: ibiqlik/action-yamllint@v4
+        uses: ibiqlik/action-yamllint@v3.1.1
         with:
           file_or_dir: .
           config_file: .yamllint.yml
