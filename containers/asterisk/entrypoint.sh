@@ -1,5 +1,5 @@
 #!/bin/sh
-# POSIX sh: ersetzt Platzhalter aus ENV in /etc/asterisk und startet Asterisk
+# POSIX sh: rendert Templates aus /etc/asterisk.tmpl nach /etc/asterisk
 set -eu
 
 tmpl_dir="/etc/asterisk.tmpl"
