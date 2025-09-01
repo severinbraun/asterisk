@@ -1,18 +1,17 @@
 #!/bin/sh
 set -eu
 
-# Defaults aus ENV (für DoorBird & Home Assistant)
+# Defaults aus ENV (DoorBird & Home Assistant)
 DOORBIRD_USER="${DOORBIRD_USER:-doorbird}"
 DOORBIRD_PASS="${DOORBIRD_PASS:-Caliba#355}"
 HOMEASSISTANT_USER="${HOMEASSISTANT_USER:-homeassistant}"
 HOMEASSISTANT_PASS="${HOMEASSISTANT_PASS:-Caliba#355}"
 
-# Verzeichnisse sicherstellen
+# Verzeichnisse sicherstellen (Asterisk erwartet Sockets/PID unter /var/run/asterisk)
 mkdir -p /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk
-# Rechte (wir laufen bereits als User 'asterisk')
 chown -R asterisk:asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk
 
-# Runtime-Credentials als separate Includes schreiben (damit /etc/asterisk read-only bleiben kann)
+# Runtime-Credentials in /run/asterisk schreiben (damit /etc/asterisk read-only bleiben kann)
 # chan_sip
 cat > /run/asterisk/creds_sip.conf <<EOF
 [${DOORBIRD_USER}]
