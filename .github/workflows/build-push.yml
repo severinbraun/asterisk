@@ -74,9 +74,10 @@ jobs:
             exit 0
           fi
 
-          IFS='.' read -r MAJOR MINOR PATCH <<EOF
-$VER
-EOF
+          run: |
+            IFS='.' read -r MAJOR MINOR PATCH <<'__EOT__'
+            ${VER}
+            __EOT__
 
           {
             echo "${{ env.IMAGE }}:v${VER}"
