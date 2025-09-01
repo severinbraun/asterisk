@@ -1,47 +1,86 @@
 # syntax=docker/dockerfile:1.9
-
-# Ziel: Ubuntu LTS (24.04), minimal installierte Pakete, alles in einem Container
 FROM ubuntu:24.04
 
+# hadolint wants versions pinned -> wir verwenden Build-ARGs, die aus versions.env kommen
 ARG DEBIAN_FRONTEND=noninteractive
+
+# Kernpakete
+ARG APACHE2_VERSION
+ARG MARIADB_SERVER_VERSION
+ARG ASTERISK_VERSION
+
+# PHP
+ARG PHP_VERSION
+ARG PHP_CLI_VERSION
+ARG PHP_COMMON_VERSION
+ARG PHP_CURL_VERSION
+ARG PHP_MYSQL_VERSION
+ARG PHP_XML_VERSION
+ARG PHP_MBSTRING_VERSION
+ARG PHP_GD_VERSION
+ARG PHP_ZIP_VERSION
+ARG PHP_BCMATH_VERSION
+ARG PHP_INTL_VERSION
+
+# Tools
+ARG SOX_VERSION
+ARG LAME_VERSION
+ARG TINI_VERSION
+ARG TZDATA_VERSION
+ARG CURL_VERSION
+ARG CA_CERTIFICATES_VERSION
+
+# OCI Labels (optional)
 ARG OWNER
 ARG REPO
-ARG FREEPBX_VERSION=16        # 16 (LTS) ist üblich; Installation passiert beim 1. Start
-
-# OCI-Metadaten
 LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
       org.opencontainers.image.title="${REPO}" \
       org.opencontainers.image.licenses="MIT"
 
-# Basispakete + Dienste ohne Recommends
-RUN set -eux; \
+# Basis-Tuning + strikt gepinnte Installationen
+RUN --mount=type=cache,target=/var/cache/apt \
+    set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      ca-certificates curl tzdata tini \
-      apache2 \
-      mariadb-server \
-      asterisk asterisk-pjsip asterisk-opus asterisk-moh-opsound-wav asterisk-core-sounds-en \
-      php php-cli php-curl php-mysql php-xml php-mbstring php-gd php-zip php-bcmath php-intl \
-      sox lame procps net-tools; \
-    # Apache minimal härten + Rewrite
-    a2dismod status || true; a2enmod rewrite headers ssl; \
-    # Cleanup
+      apache2=${APACHE2_VERSION} \
+      mariadb-server=${MARIADB_SERVER_VERSION} \
+      asterisk=${ASTERISK_VERSION} \
+      php=${PHP_VERSION} \
+      php-cli=${PHP_CLI_VERSION} \
+      php-common=${PHP_COMMON_VERSION} \
+      php-curl=${PHP_CURL_VERSION} \
+      php-mysql=${PHP_MYSQL_VERSION} \
+      php-xml=${PHP_XML_VERSION} \
+      php-mbstring=${PHP_MBSTRING_VERSION} \
+      php-gd=${PHP_GD_VERSION} \
+      php-zip=${PHP_ZIP_VERSION} \
+      php-bcmath=${PHP_BCMATH_VERSION} \
+      php-intl=${PHP_INTL_VERSION} \
+      sox=${SOX_VERSION} \
+      lame=${LAME_VERSION} \
+      tini=${TINI_VERSION} \
+      tzdata=${TZDATA_VERSION} \
+      curl=${CURL_VERSION} \
+      ca-certificates=${CA_CERTIFICATES_VERSION}; \
     rm -rf /var/lib/apt/lists/*
 
-# Apache-Konfig, PHP-Tuning, Entrypoint
-COPY --chown=root:root apache-vhost.conf /etc/apache2/sites-available/000-default.conf
-COPY --chown=root:root php.ini            /etc/php/*/apache2/conf.d/99-freepbx.ini
-COPY --chown=root:root entrypoint.sh      /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+# App-User
+RUN adduser --disabled-password --gecos "" app
+USER app
+WORKDIR /app
 
-# Verzeichnisse für Persistenz (werden via Volumes gemountet)
-VOLUME ["/var/lib/mysql", "/var/lib/asterisk", "/etc/asterisk", "/var/spool/asterisk", "/var/log/asterisk", "/var/www/html"]
+# Deine Files
+COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
-# Ports: SIP/PJSIP + RTP + WebUI
-EXPOSE 5060/udp 5160/udp 5061/tcp 80 443 10000-20000/udp
+# (Optional) Apache/PHP Configs reinkopieren
+# COPY --chown=app:app apache-vhost.conf /etc/apache2/sites-available/000-default.conf
+# COPY --chown=app:app php.ini /etc/php/*/apache2/conf.d/zzz-custom.ini
 
-# Healthcheck: prüft Asterisk-Uptime (nach dem Start)
-HEALTHCHECK --interval=30s --timeout=5s CMD bash -lc "asterisk -rx 'core show uptime' >/dev/null 2>&1 || exit 1"
+USER root
+EXPOSE 80 443 5060/udp 5060/tcp 5160/udp 5160/tcp 18000-20000/udp
 
-# Tini als PID 1, damit Prozesse sauber gehandhabt werden
-ENTRYPOINT ["/usr/bin/tini","--","/entrypoint.sh"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["bash","-c","pgrep -x asterisk >/dev/null && curl -fsS http://127.0.0.1/ || exit 1"]
+
+ENTRYPOINT ["/usr/bin/tini","--","/app/entrypoint.sh"]
