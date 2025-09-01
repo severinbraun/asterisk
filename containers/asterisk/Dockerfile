@@ -1,46 +1,54 @@
 # syntax=docker/dockerfile:1.9
 FROM ubuntu:24.04
 
-# hadolint wants versions pinned -> wir verwenden Build-ARGs, die aus versions.env kommen
-ARG DEBIAN_FRONTEND=noninteractive
-
-# Kernpakete
-ARG APACHE2_VERSION
-ARG MARIADB_SERVER_VERSION
-ARG ASTERISK_VERSION
-
-# PHP
-ARG PHP_VERSION
-ARG PHP_CLI_VERSION
-ARG PHP_COMMON_VERSION
-ARG PHP_CURL_VERSION
-ARG PHP_MYSQL_VERSION
-ARG PHP_XML_VERSION
-ARG PHP_MBSTRING_VERSION
-ARG PHP_GD_VERSION
-ARG PHP_ZIP_VERSION
-ARG PHP_BCMATH_VERSION
-ARG PHP_INTL_VERSION
-
-# Tools
-ARG SOX_VERSION
-ARG LAME_VERSION
-ARG TINI_VERSION
-ARG TZDATA_VERSION
-ARG CURL_VERSION
-ARG CA_CERTIFICATES_VERSION
-
-# OCI Labels (optional)
-ARG OWNER
-ARG REPO
-LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
-      org.opencontainers.image.title="${REPO}" \
+LABEL org.opencontainers.image.description="Asterisk + FreePBX base (Ubuntu 24.04 LTS)" \
       org.opencontainers.image.licenses="MIT"
 
-# Basis-Tuning + strikt gepinnte Installationen
-RUN --mount=type=cache,target=/var/cache/apt \
-    set -eux; \
+# ---- Build-time Metadata (optional) ----
+ARG OWNER=${OWNER:-unknown}
+ARG REPO=${REPO:-asterisk}
+
+# ---- Paketversionen: aus deinem apt-cache policy Output gepinnt ----
+ARG APACHE2_VERSION=2.4.58-1ubuntu8.8
+ARG MARIADB_SERVER_VERSION=1:10.11.13-0ubuntu0.24.04.1
+ARG ASTERISK_VERSION=1:20.6.0~dfsg+~cs6.13.40431414-2build5
+
+# PHP 8.3 Kern + Extensions
+ARG PHP_VERSION=2:8.3+93ubuntu2
+ARG PHP_CLI_VERSION=2:8.3+93ubuntu2
+ARG PHP_COMMON_VERSION=2:93ubuntu2
+ARG PHP_CURL_VERSION=2:8.3+93ubuntu2
+ARG PHP_MYSQL_VERSION=2:8.3+93ubuntu2
+ARG PHP_XML_VERSION=2:8.3+93ubuntu2
+ARG PHP_MBSTRING_VERSION=2:8.3+93ubuntu2
+ARG PHP_GD_VERSION=2:8.3+93ubuntu2
+ARG PHP_ZIP_VERSION=2:8.3+93ubuntu2
+ARG PHP_BCMATH_VERSION=2:8.3+93ubuntu2
+ARG PHP_INTL_VERSION=2:8.3+93ubuntu2
+
+# Tools
+ARG SOX_VERSION=14.4.2+git20190427-4build4
+ARG LAME_VERSION=3.100-6build1
+ARG TINI_VERSION=0.19.0-1
+ARG TZDATA_VERSION=2025b-0ubuntu0.24.04.1
+ARG CURL_VERSION=8.5.0-2ubuntu10.6
+ARG CA_CERTIFICATES_VERSION=20240203
+
+# OCI-Labels dynamisch
+LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
+      org.opencontainers.image.title="${REPO}"
+
+# ----- Basis-System & Repos -----
+ENV DEBIAN_FRONTEND=noninteractive
+
+# hadolint ignore=DL3008,DL3005
+RUN set -eux; \
     apt-get update; \
+    apt-get install -y --no-install-recommends software-properties-common ca-certificates=${CA_CERTIFICATES_VERSION}; \
+    add-apt-repository -y universe; \
+    add-apt-repository -y multiverse; \
+    apt-get update; \
+    # Kernpakete + Asterisk + Web/PHP + Tools (gepinnt)
     apt-get install -y --no-install-recommends \
       apache2=${APACHE2_VERSION} \
       mariadb-server=${MARIADB_SERVER_VERSION} \
@@ -60,27 +68,32 @@ RUN --mount=type=cache,target=/var/cache/apt \
       lame=${LAME_VERSION} \
       tini=${TINI_VERSION} \
       tzdata=${TZDATA_VERSION} \
-      curl=${CURL_VERSION} \
-      ca-certificates=${CA_CERTIFICATES_VERSION}; \
+      curl=${CURL_VERSION}; \
+    # Apache im Vordergrund betreiben können
+    a2enmod rewrite; \
+    # Verzeichnisse vorbereiten
+    mkdir -p /run/asterisk /var/lib/asterisk /var/log/asterisk /var/run/mysqld; \
+    chown -R asterisk:asterisk /run/asterisk /var/lib/asterisk /var/log/asterisk || true; \
+    chmod 0775 /var/run/mysqld; \
+    # Cleanup
+    apt-get purge -y --auto-remove software-properties-common || true; \
     rm -rf /var/lib/apt/lists/*
 
-# App-User
-RUN adduser --disabled-password --gecos "" app
-USER app
+# Unprivilegierter Nutzer für App-Dateien
+RUN adduser --system --group --home /app app
 WORKDIR /app
 
-# Deine Files
-COPY --chown=app:app entrypoint.sh /app/entrypoint.sh
-RUN chmod +x /app/entrypoint.sh
+# Entrypoint-Skript hinein
+COPY --chown=root:root entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod +x /usr/local/bin/entrypoint.sh
 
-# (Optional) Apache/PHP Configs reinkopieren
-# COPY --chown=app:app apache-vhost.conf /etc/apache2/sites-available/000-default.conf
-# COPY --chown=app:app php.ini /etc/php/*/apache2/conf.d/zzz-custom.ini
+# HTTP, SIP, RTP Standard-Ports (passe nach Bedarf an)
+EXPOSE 80 5060/udp 5060/tcp 10000-20000/udp
 
-USER root
-EXPOSE 80 443 5060/udp 5060/tcp 5160/udp 5160/tcp 18000-20000/udp
+# Healthcheck sehr simpel (Web lebt?)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
+  CMD curl -fsS http://127.0.0.1/ || exit 1
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
-  CMD ["bash","-c","pgrep -x asterisk >/dev/null && curl -fsS http://127.0.0.1/ || exit 1"]
-
-ENTRYPOINT ["/usr/bin/tini","--","/app/entrypoint.sh"]
+# Tini als PID 1; entrypoint startet alle Dienste
+ENTRYPOINT ["/usr/bin/tini","--","/usr/local/bin/entrypoint.sh"]
+CMD ["foreground"]
