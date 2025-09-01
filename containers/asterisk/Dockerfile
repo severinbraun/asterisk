@@ -2,8 +2,8 @@
 FROM alpine:3.20
 
 ARG OWNER=severinbraun
-LABEL org.opencontainers.image.source="https://github.com/${OWNER}/hello-world" \
-      org.opencontainers.image.title="hello-world (mono-repo demo)" \
+LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${OWNER}" \
+      org.opencontainers.image.title="${OWNER}" \
       org.opencontainers.image.licenses="MIT"
 
 RUN adduser -D app
