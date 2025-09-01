@@ -2,22 +2,14 @@ services:
   asterisk:
     image: ghcr.io/${OWNER:-severinbraun}/${REPO:-asterisk}:${TAG:-latest}
     container_name: asterisk
-    restart: unless-stopped
     network_mode: host
-    environment:
-      - DOORBIRD_USER=${DOORBIRD_USER}
-      - DOORBIRD_PASS=${DOORBIRD_PASS}
-      - HA_USER=${HA_USER}
-      - HA_PASS=${HA_PASS}
-      - RTP_START=${RTP_START:-10000}
-      - RTP_END=${RTP_END:-20000}
-      - ASTERISK_LOG_LEVEL=${ASTERISK_LOG_LEVEL:-notice}
-    # WICHTIG: wir mounten die HOST-Config als Templates!
-    # Der Entrypoint rendert daraus /etc/asterisk.
+    restart: unless-stopped
+    env_file:
+      - ./deploy/.env
     volumes:
-      - asterisk-lib:/var/lib/asterisk
-      - asterisk-log:/var/log/asterisk
-      - ./config:/etc/asterisk.tmpl
-volumes:
-  asterisk-lib:
-  asterisk-log:
+      # Eigene Konfiguration einbinden (empfohlen read-only).
+      # Lege dazu ./config an und kopiere Basisdateien aus containers/asterisk/etc/asterisk hinein.
+      - ./config:/etc/asterisk:ro
+      # Persistenz
+      - ./var:/var/lib/asterisk
+      - ./log:/var/log/asterisk
