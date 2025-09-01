@@ -1,4 +1,7 @@
+name: ${REPO:-asterisk}
+
 services:
   asterisk:
-    image: ghcr.io/${OWNER}/${REPO}:${TAG:-latest}
-    restart: unless-stopped
+    image: ghcr.io/${OWNER}/${REPO}:${TAG}
+    env_file:
+      - .env
