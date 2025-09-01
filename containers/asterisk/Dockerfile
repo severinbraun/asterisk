@@ -2,42 +2,58 @@
 FROM ubuntu:24.04
 
 ARG DEBIAN_FRONTEND=noninteractive
-# Nur für Labels – verhindern "UndefinedVar"-Lint-Fehler, falls nicht übergeben
-ARG OWNER=unknown
-ARG REPO=asterisk
 
-# Basis-Pakete + Asterisk + gosu (zum Privilege-Drop im Entrypoint)
+# Hadolint-sicher: Defaults setzen, damit Labels nie "undefined" sind
+ARG OWNER=unknown
+ARG REPO=unknown
+
+# Gepinnte Versionen (werden aus versions.env überschrieben, falls via --build-arg gesetzt)
+ARG ASTERISK_VERSION=1:20.6.0~dfsg+~cs6.13.40431414-2build5
+ARG TINI_VERSION=0.19.0-1
+ARG TZDATA_VERSION=2025b-0ubuntu0.24.04.1
+ARG CURL_VERSION=8.5.0-2ubuntu10.6
+ARG CA_CERTIFICATES_VERSION=20240203
+
+# Labels (keine undefined-vars mehr)
+LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
+      org.opencontainers.image.title="${REPO}" \
+      org.opencontainers.image.description="Minimal Asterisk (chan_sip + chan_pjsip) on Ubuntu 24.04" \
+      org.opencontainers.image.url="https://github.com/${OWNER}/${REPO}" \
+      org.opencontainers.image.vendor="${OWNER}"
+
+# Pinned installs (DL3008-konform)
 RUN set -eux; \
     apt-get update; \
     apt-get install -y --no-install-recommends \
-      asterisk \
-      gosu \
-      ca-certificates \
-      tzdata \
-      curl; \
+      "asterisk=${ASTERISK_VERSION}" \
+      "tini=${TINI_VERSION}" \
+      "tzdata=${TZDATA_VERSION}" \
+      "curl=${CURL_VERSION}" \
+      "ca-certificates=${CA_CERTIFICATES_VERSION}"; \
     rm -rf /var/lib/apt/lists/*
 
-# Service-User sicherstellen (Fehler vermeiden, falls schon vorhanden)
-RUN id -u asterisk >/dev/null 2>&1 || adduser --disabled-password --gecos "" asterisk
+# Asterisk-User anlegen (idempotent), Verzeichnisse/Ownership
+RUN set -eux; \
+    if ! id -u asterisk >/dev/null 2>&1; then \
+      adduser --disabled-password --gecos "" asterisk; \
+    fi; \
+    mkdir -p /var/lib/asterisk /etc/asterisk /var/log/asterisk /run/asterisk; \
+    chown -R asterisk:asterisk /var/lib/asterisk /etc/asterisk /var/log/asterisk /run/asterisk
 
-# Konfig (nur das, was du überschreiben willst)
-# -> modules.conf legen wir hier ab
-COPY etc/asterisk/modules.conf /etc/asterisk/modules.conf
-
-# Entrypoint (legt Laufzeit-Verzeichnisse an, chowned sie und startet Asterisk als 'asterisk')
-COPY entrypoint.sh /entrypoint.sh
+# Konfiguration & Entrypoint
+# Keine Brace-Expansion, und direkt mit Ownership kopieren (SC3009/Best Practice)
+COPY --chown=asterisk:asterisk configs/ /etc/asterisk/
+COPY --chown=asterisk:asterisk entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
-# OCI-Labels
-LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
-      org.opencontainers.image.title="asterisk" \
-      org.opencontainers.image.description="Minimal Asterisk (Ubuntu 24.04) with gosu entrypoint"
+# Ports: SIP (UDP 5060), optional TLS (TCP 5061), RTP
+EXPOSE 5060/udp 5061/tcp 10000-20000/udp
 
-# SIP + RTP
-EXPOSE 5060/udp 5061/tcp 5061/udp 10000-20000/udp
+USER asterisk
+WORKDIR /var/lib/asterisk
 
-# Optional, aber praktisch
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
-  CMD /usr/sbin/asterisk -rx 'core show uptime' >/dev/null 2>&1 || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
+  CMD /bin/sh -c 'asterisk -rx "core show uptime" >/dev/null 2>&1 || exit 1'
 
-ENTRYPOINT ["/entrypoint.sh"]
+# Tini als PID 1
+ENTRYPOINT ["/usr/bin/tini","--","/entrypoint.sh"]
