@@ -39,21 +39,21 @@ RUN set -eux; \
 ARG ASTERISK_CN=asterisk.veenpark.de
 ARG ASTERISK_SAN=DNS:asterisk.veenpark.de,IP:192.168.2.48
 
-# Verzeichnisse & Rechte + Self-signed Zertifikat/Key erstellen
+# Verzeichnisse & Rechte + Self-signed Zertifikat/Key erstellen (ohne Heredoc)
 RUN set -eux; \
     mkdir -p /etc/asterisk/keys /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk; \
     chown -R asterisk:asterisk /etc/asterisk /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk; \
     umask 077; \
-    cat > /tmp/openssl.cnf <<EOF
-[req]
-distinguished_name = req
-x509_extensions = v3_req
-prompt = no
-[req_distinguished_name]
-CN = ${ASTERISK_CN}
-[v3_req]
-subjectAltName = ${ASTERISK_SAN}
-EOF
+    { \
+      echo '[req]'; \
+      echo 'distinguished_name = req'; \
+      echo 'x509_extensions = v3_req'; \
+      echo 'prompt = no'; \
+      echo '[req_distinguished_name]'; \
+      echo "CN = ${ASTERISK_CN}"; \
+      echo '[v3_req]'; \
+      echo "subjectAltName = ${ASTERISK_SAN}"; \
+    } > /tmp/openssl.cnf; \
     openssl req -x509 -newkey rsa:2048 -sha256 -days 825 -nodes \
       -keyout /etc/asterisk/keys/asterisk.key \
       -out    /etc/asterisk/keys/asterisk.crt \
