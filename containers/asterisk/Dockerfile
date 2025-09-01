@@ -1,8 +1,9 @@
 # syntax=docker/dockerfile:1.9
 FROM alpine:3.20
 
-ARG OWNER=severinbraun
-LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${OWNER}" \
+ARG OWNER=${{ github.repository_owner }}
+ARG REPO=${{ github.event.repository.name }}
+LABEL org.opencontainers.image.source="https://github.com/${OWNER}/${REPO}" \
       org.opencontainers.image.title="${REPO}" \
       org.opencontainers.image.licenses="MIT"
 
