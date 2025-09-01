@@ -13,11 +13,30 @@ render_tpl() {
   rm -f "$tmp"
 }
 
+# --- TLS: Self-Signed Zertifikate erzeugen, wenn nicht vorhanden ---
+CRT="/etc/asterisk/keys/asterisk.crt"
+KEY="/etc/asterisk/keys/asterisk.key"
+
+if [ ! -s "$CRT" ] || [ ! -s "$KEY" ]; then
+  echo "[entrypoint] generating self-signed TLS certs for CN=${CERT_CN}"
+  # -nodes: unencrypted key (Asterisk erwartet unverschlüsselte Keys)
+  # Gültigkeit 10 Jahre
+  openssl req -x509 -nodes -newkey rsa:2048 \
+    -subj "/CN=${CERT_CN}" \
+    -days 3650 \
+    -keyout "$KEY" -out "$CRT"
+  chmod 600 "$KEY"
+  chown asterisk:asterisk "$CRT" "$KEY"
+fi
+
 # Defaults aus ENV (DoorBird & Home Assistant)
 DOORBIRD_USER="${DOORBIRD_USER:-doorbird}"
 DOORBIRD_PASS="${DOORBIRD_PASS:-Caliba#355}"
 HOMEASSISTANT_USER="${HOMEASSISTANT_USER:-homeassistant}"
 HOMEASSISTANT_PASS="${HOMEASSISTANT_PASS:-Caliba#355}"
+HA_AMI_USER="${HA_AMI_USER:=admin}"
+HA_AMI_PASS="${HA_AMI_PASS:=Caliba#355}"
+HA_AMI_PERMIT="${HA_AMI_PERMIT:=0.0.0.0/0}"
 
 # Verzeichnisse sicherstellen (Asterisk erwartet Sockets/PID unter /var/run/asterisk)
 mkdir -p /var/run/asterisk /var/log/asterisk /var/lib/asterisk /run/asterisk
