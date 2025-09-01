@@ -1,16 +1,26 @@
 services:
   asterisk:
-    image: ghcr.io/${OWNER:-severinbraun}/${REPO:-asterisk}:${TAG:-latest}
-    network_mode: "host"              # oder Ports mappen, falls nicht möglich
-    # ports:
-    #   - "5060:5060/udp"
-    #   - "5060:5060/tcp"
-    #   - "10000-20000:10000-20000/udp"
+    image: ghcr.io/severinbraun}/asterisk:latest
+    container_name: asterisk
     restart: unless-stopped
-    volumes:
-      - ./data/etc-asterisk:/etc/asterisk
-      - ./data/lib-asterisk:/var/lib/asterisk
-      - ./data/spool-asterisk:/var/spool/asterisk
-      - ./data/log-asterisk:/var/log/asterisk
+    network_mode: "host" # vereinfacht NAT/Video/DTMF – alternativ Ports öffnen (siehe unten)
     environment:
       - TZ=Europe/Berlin
+    volumes:
+      - ./configs/asterisk/asterisk.conf:/etc/asterisk/asterisk.conf:ro
+      - ./configs/asterisk/modules.conf:/etc/asterisk/modules.conf:ro
+      - ./configs/asterisk/sip.conf:/etc/asterisk/sip.conf:ro
+      - ./configs/asterisk/rtp.conf:/etc/asterisk/rtp.conf:ro
+      - ./configs/asterisk/extensions.conf:/etc/asterisk/extensions.conf:ro
+      - ./configs/asterisk/logger.conf:/etc/asterisk/logger.conf:ro
+      - asterisk-spool:/var/spool/asterisk
+      - asterisk-log:/var/log/asterisk
+      - asterisk-lib:/var/lib/asterisk
+    # Wenn du NICHT host networking nutzt, öffne die Ports so:
+    # ports:
+    #   - "5060:5060/udp"      # SIP (chan_sip)
+    #   - "10000-10100:10000-10100/udp" # RTP (Audio/Video)
+volumes:
+  asterisk-spool:
+  asterisk-log:
+  asterisk-lib:
