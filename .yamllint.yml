@@ -6,6 +6,7 @@ rules:
     allowed-values: ['true', 'false', 'on', 'off', 'yes', 'no']
   indentation:
     indent-sequences: consistent
+  document-start: disable
   line-length:
     max: 140
     allow-non-breakable-words: true
