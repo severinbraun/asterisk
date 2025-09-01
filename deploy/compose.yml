@@ -1,40 +1,16 @@
-name: asterisk
 services:
   asterisk:
     image: ghcr.io/${OWNER:-severinbraun}/${REPO:-asterisk}:${TAG:-latest}
-    # oder zum schnellen lokalen Build:
-    # build:
-    #   context: containers/asterisk
-    #   dockerfile: Dockerfile
-    environment:
-      TZ: ${TZ:-Europe/Berlin}
-      DB_ROOT_PASSWORD: ${DB_ROOT_PASSWORD:-rootpass}
-      DB_APP_USER: ${DB_APP_USER:-freepbx}
-      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-freepbxpass}
-      DB_AST_DB: ${DB_AST_DB:-asterisk}
-      DB_CDR_DB: ${DB_CDR_DB:-asteriskcdrdb}
-      RTP_START: ${RTP_START:-10000}
-      RTP_FINISH: ${RTP_FINISH:-20000}
-      FREEPBX_VERSION: ${FREEPBX_VERSION:-16}
-    ports:
-      - "5060:5060/udp"
-      - "5160:5160/udp"
-      - "5061:5061/tcp"
-      - "10000-20000:10000-20000/udp"
-      - "80:80"
-      - "443:443"
-    volumes:
-      - mysql-data:/var/lib/mysql
-      - ast-lib:/var/lib/asterisk
-      - ast-etc:/etc/asterisk
-      - ast-spool:/var/spool/asterisk
-      - ast-log:/var/log/asterisk
-      - ast-www:/var/www/html
+    network_mode: "host"              # oder Ports mappen, falls nicht möglich
+    # ports:
+    #   - "5060:5060/udp"
+    #   - "5060:5060/tcp"
+    #   - "10000-20000:10000-20000/udp"
     restart: unless-stopped
-volumes:
-  mysql-data:
-  ast-lib:
-  ast-etc:
-  ast-spool:
-  ast-log:
-  ast-www:
+    volumes:
+      - ./data/etc-asterisk:/etc/asterisk
+      - ./data/lib-asterisk:/var/lib/asterisk
+      - ./data/spool-asterisk:/var/spool/asterisk
+      - ./data/log-asterisk:/var/log/asterisk
+    environment:
+      - TZ=Europe/Berlin
