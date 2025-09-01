@@ -1,5 +1,6 @@
 name: Security Scan
-on:
+
+"on":
   workflow_run:
     workflows: ["Lint"]
     types: [completed]
@@ -7,26 +8,16 @@ on:
 
 jobs:
   trivy:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Build (load, no push) with pinned args
-        uses: docker/build-push-action@v6
+      - name: Trivy FS scan (repo)
+        uses: aquasecurity/trivy-action@0.28.0
         with:
-          context: containers/asterisk
-          file: containers/asterisk/Dockerfile
-          load: true
-          tags: tmp:scan
-          build-args: |
-            OWNER=${{ github.repository_owner }}
-            REPO=${{ github.event.repository.name }}
-            $(cat containers/asterisk/versions.env)
-
-      - name: Trivy image scan
-        uses: aquasecurity/trivy-action@0.24.0
-        with:
-          image-ref: tmp:scan
+          scan-type: fs
           format: table
-          exit-code: 0
+          severity: CRITICAL,HIGH
           ignore-unfixed: true
+          exit-code: 1
