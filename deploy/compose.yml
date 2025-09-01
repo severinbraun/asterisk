@@ -1,0 +1,4 @@
+services:
+  asterisk:
+    image: ghcr.io/${OWNER}/${REPO}:${TAG:-latest}
+    restart: unless-stopped
