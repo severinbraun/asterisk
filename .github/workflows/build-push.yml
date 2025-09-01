@@ -1,5 +1,6 @@
 name: Build & Push
-on:
+
+"on":
   workflow_run:
     workflows: ["Security Scan"]
     types: [completed]
@@ -23,7 +24,9 @@ env:
 
 jobs:
   build:
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout (mit Tags)
         uses: actions/checkout@v4
@@ -31,33 +34,60 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
 
+      - name: Load pinned versions (optional)
+        id: vers
+        shell: bash
+        run: |
+          set -euo pipefail
+          FILE="containers/asterisk/versions.env"
+          {
+            echo "args<<EOF"
+            echo "OWNER=${{ env.OWNER }}"
+            echo "REPO=${{ env.REPO }}"
+            if [ -f "$FILE" ]; then
+              # Kommentare/Leerzeilen raus
+              sed -E '/^\s*($|#)/d' "$FILE"
+            fi
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Resolve Version (Tag/Release/Manual)
         id: ver
         shell: bash
         run: |
           set -euo pipefail
           VER_INPUT="${{ github.event.inputs.version || '' }}"
-          VER=""
-          if [ -n "${VER_INPUT}" ]; then VER="${VER_INPUT}"; fi
-          if [ -z "${VER}" ] && [ "${GITHUB_REF_TYPE}" = "tag" ]; then VER="${GITHUB_REF_NAME#v}"; fi
-          if [ -z "${VER}" ] && [ "${{ github.event_name }}" = "release" ]; then VER="${{ github.event.release.tag_name#v }}"; fi
-          if [ -n "${VER}" ]; then
-            IFS='.' read -r MAJOR MINOR PATCH <<__EOT__
-${VER}
-__EOT__
-            {
-              echo "${{ env.IMAGE }}:v${VER}"
-              echo "${{ env.IMAGE }}:${VER}"
-              echo "${{ env.IMAGE }}:${MAJOR}.${MINOR}"
-              echo "${{ env.IMAGE }}:${MAJOR}"
-            } > /tmp/extra_tags.txt
-            echo "version=${VER}" >> "$GITHUB_OUTPUT"
-            echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> "$GITHUB_OUTPUT"
-            echo "TAG=${VER}" >> "$GITHUB_ENV"
-          else
+          VER="${VER_INPUT}"
+
+          if [ -z "$VER" ] && [ "${GITHUB_REF_TYPE:-}" = "tag" ]; then
+            VER="${GITHUB_REF_NAME#v}"
+          fi
+
+          if [ -z "$VER" ] && [ "${{ github.event_name }}" = "release" ]; then
+            T="${{ github.event.release.tag_name }}"
+            VER="${T#v}"
+          fi
+
+          if [ -z "$VER" ]; then
             echo "version=" >> "$GITHUB_OUTPUT"
             echo "extra_tags=" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+
+          IFS='.' read -r MAJOR MINOR PATCH <<EOF
+$VER
+EOF
+
+          {
+            echo "${{ env.IMAGE }}:v${VER}"
+            echo "${{ env.IMAGE }}:${VER}"
+            echo "${{ env.IMAGE }}:${MAJOR}.${MINOR}"
+            echo "${{ env.IMAGE }}:${MAJOR}"
+          } > /tmp/extra_tags.txt
+
+          echo "version=$VER" >> "$GITHUB_OUTPUT"
+          echo "extra_tags=$(tr '\n' ',' < /tmp/extra_tags.txt | sed 's/,$//')" >> "$GITHUB_OUTPUT"
+          echo "TAG=$VER" >> "$GITHUB_ENV"
 
       - name: Docker meta (branch/latest/sha)
         id: meta
@@ -83,22 +113,6 @@ __EOT__
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Build args aus versions.env laden
-        id: args
-        shell: bash
-        run: |
-          set -euo pipefail
-          FILE="containers/${{ env.REPO }}/versions.env"
-          {
-            echo 'args<<__GHA_EOF__'
-            echo "OWNER=${{ env.OWNER }}"
-            echo "REPO=${{ env.REPO }}"
-            if [ -f "$FILE" ]; then
-              grep -v '^[[:space:]]*#' "$FILE" | sed '/^[[:space:]]*$/d'
-            fi
-            echo '__GHA_EOF__'
-          } >>"$GITHUB_OUTPUT"
-
       - name: Build & Push (multi-arch)
         uses: docker/build-push-action@v6
         with:
@@ -110,7 +124,7 @@ __EOT__
             ${{ steps.meta.outputs.tags }}
             ${{ steps.ver.outputs.extra_tags }}
           labels: ${{ steps.meta.outputs.labels }}
-          build-args: ${{ steps.args.outputs.args }}
+          build-args: ${{ steps.vers.outputs.args }}
           provenance: false
           sbom: false
           cache-from: type=gha
