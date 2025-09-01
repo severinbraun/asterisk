@@ -111,6 +111,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             OWNER=${{ env.OWNER }}
+            REPO=${{ env.REPO }}
           provenance: false
           sbom: false
           cache-from: type=gha
