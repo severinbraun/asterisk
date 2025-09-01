@@ -1,12 +1,9 @@
----
-name: "Lint"
-
+name: Lint
 "on":
   push:
-    branches: ["main","master"]
+    branches: [main, master]
   pull_request:
-    branches: ["main","master"]
-  workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   lint:
@@ -14,20 +11,24 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
 
       - name: Hadolint (Dockerfile)
         uses: hadolint/hadolint-action@v3.1.0
         with:
           dockerfile: containers/asterisk/Dockerfile
 
-      - name: Shellcheck (entrypoint.sh)
-        uses: ludeeus/action-shellcheck@2.0.0
-        with:
-          scandir: containers/asterisk
-          severity: warning
-
       - name: YAML Lint
         uses: ibiqlik/action-yamllint@v3.1.1
         with:
           file_or_dir: .
           config_file: .yamllint.yml
+
+      - name: Shellcheck (POSIX sh)
+        uses: ludeeus/action-shellcheck@2.0.0
+        with:
+          scandir: containers/asterisk
+        env:
+          SHELLCHECK_OPTS: -s sh
