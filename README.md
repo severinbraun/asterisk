@@ -9,7 +9,7 @@
 ```bash
 docker pull ghcr.io/severinbraun/asterisk:latest
 docker run --rm ghcr.io/severinbraun/asterisk:latest
-
+```
 
 
 # Nginx-proxy-manager
