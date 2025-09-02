@@ -1,0 +1,25 @@
+type: custom:sipjs-card
+server: asterisk.veenpark.de # change it to your domain
+port: "443"
+button_size: "48"
+state_color: true
+auto_answer: false
+hide_me: true
+custom_title: ""
+video: false
+custom:
+  - name: Echo
+    number: "600"
+    icon: mdi:phone-classic
+    edit: false
+  - name: Ansage
+    number: "610"
+    icon: mdi:phone-classic
+    edit: false
+extensions:
+  - person: person.severin_braun
+    name: homeassistant
+    extension: "1002"
+    secret: Caliba#355
+    icon: mdi:person
+iceTimeout: 5
