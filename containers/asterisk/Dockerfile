@@ -30,6 +30,7 @@ RUN set -eux; \
       ca-certificates=${CA_CERTIFICATES_VERSION} \
       curl=${CURL_VERSION} \
       openssl \
+      nano \
       tini=${TINI_VERSION} \
       asterisk=${ASTERISK_VERSION}; \
     rm -rf /var/lib/apt/lists/*
