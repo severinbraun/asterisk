@@ -25,3 +25,5 @@ In my case the domain is **asterisk.veenpark.de** which is pointing to my nginx-
 ## Connect home assistant via SIP
 
 **HACS Dashboard plugin:** https://github.com/TECH7Fox/sip-hass-card
+
+Needs to be configured
